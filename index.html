@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>گزارش تجمیعی ماهانه با درصدگیری</title>
+<style>
+  :root{--bg:#0f172a;--card:#111827;--muted:#94a3b8;--accent:#22c55e;--danger:#ef4444;}
+  *{box-sizing:border-box} body{margin:0;font-family:Tahoma, Vazirmatn, sans-serif;background:#0b1220;color:#e5e7eb}
+  h1,h2{margin:.4rem 0}
+  .wrap{max-width:1100px;margin:24px auto;padding:0 16px}
+  .card{background:linear-gradient(180deg,#0f172a,#0b1220 70%);border:1px solid #1f2937;border-radius:14px;padding:16px;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+  .grid{display:grid;grid-template-columns:repeat(12,1fr);gap:12px}
+  .g6{grid-column:span 6} .g12{grid-column:span 12} .g4{grid-column:span 4}
+  label{font-size:.9rem;color:#a3b2c4}
+  input,select,button{width:100%;padding:10px;border-radius:10px;border:1px solid #263244;background:#0b1526;color:#e5e7eb;outline:none}
+  input:focus,select:focus{border-color:#3b82f6}
+  button{cursor:pointer;border:1px solid #2b3547}
+  button.primary{background:#1f2937;border:1px solid #334155}
+  button.primary:hover{filter:brightness(1.15)}
+  button.danger{background:#1b2432;border-color:#3a1f24;color:#fecaca}
+  .toolbar{display:flex;flex-wrap:wrap;gap:8px}
+  table{width:100%;border-collapse:collapse;border-spacing:0;font-size:.9rem}
+  th,td{border-bottom:1px solid #1f2937;padding:8px 6px;text-align:center}
+  th{color:#93c5fd;font-weight:600}
+  tfoot td{font-weight:700;color:#e5f2ff}
+  .muted{color:#94a3b8}
+  .chip{display:inline-block;padding:.1rem .5rem;border-radius:999px;border:1px solid #2b3547;background:#0c1628;color:#9bd4ff;font-size:.8rem}
+  canvas{width:100%;height:260px;background:linear-gradient(180deg, rgba(30,41,59,.25), rgba(2,6,23,.05));border:1px solid #1f2937;border-radius:12px}
+  .hint{font-size:.85rem;color:#9aa8bd}
+  .right{text-align:right}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>گزارش ماهانه منابع (با درصدگیری از جمع)</h1>
+
+  <!-- فرم ورود روزانه -->
+  <div class="card" style="margin-top:10px">
+    <h2>ورود/ویرایش داده‌ی روزانه</h2>
+    <div class="grid">
+      <div class="g4">
+        <label>تاریخ</label>
+        <input id="date" type="date">
+      </div>
+      <div class="g4">
+        <label>قرض‌الحسنه جاری</label>
+        <input id="jari" type="number" min="0" step="1" placeholder="مثلاً 152127943337">
+      </div>
+      <div class="g4">
+        <label>قرض‌الحسنه پس‌انداز</label>
+        <input id="pasandaz" type="number" min="0" step="1" placeholder="مثلاً 15169612184">
+      </div>
+      <div class="g4">
+        <label>سرمایه‌گذاری کوتاه‌مدت</label>
+        <input id="kotah" type="number" min="0" step="1" placeholder="مثلاً 61247373512">
+      </div>
+      <div class="g4">
+        <label>سرمایه‌گذاری بلندمدت</label>
+        <input id="boland" type="number" min="0" step="1" placeholder="مثلاً 210000000">
+      </div>
+      <div class="g4">
+        <label class="muted">‌</label>
+        <div class="toolbar">
+          <button class="primary" onclick="saveEntry()">ذخیره/به‌روزرسانی روز</button>
+          <button onclick="clearForm()">پاک کردن فرم</button>
+        </div>
+      </div>
+    </div>
+    <div class="hint right">نکته: اگر برای تاریخی داده موجود باشد، با ذخیره دوباره **به‌روزرسانی** می‌شود.</div>
+  </div>
+
+  <!-- فیلتر ماه -->
+  <div class="card" style="margin-top:14px">
+    <div class="grid">
+      <div class="g6">
+        <label>انتخاب ماه برای گزارش</label>
+        <input id="monthPicker" type="month">
+      </div>
+      <div class="g6">
+        <label class="muted">عملیات</label>
+        <div class="toolbar">
+          <button class="primary" onclick="exportCSV()">خروجی CSV</button>
+          <button class="primary" onclick="exportJSON()">خروجی JSON</button>
+          <button class="primary" onclick="window.print()">چاپ / ذخیره PDF</button>
+          <button class="danger" onclick="wipeMonth()">حذف داده‌های این ماه</button>
+          <label class="chip" style="cursor:pointer">
+            ورود از CSV
+            <input id="csvImport" type="file" accept=".csv" style="display:none" onchange="importCSV(this.files[0])">
+          </label>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- جدول روزانه -->
+  <div class="card" style="margin-top:14px">
+    <h2>جدول روزانه (با درصد از جمع روز)</h2>
+    <table id="dailyTable">
+      <thead>
+        <tr>
+          <th>تاریخ</th>
+          <th>جاری</th><th>%</th>
+          <th>پس‌انداز</th><th>%</th>
+          <th>کوتاه‌مدت</th><th>%</th>
+          <th>بلندمدت</th><th>%</th>
+          <th>جمع کل</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+      <tfoot>
+        <tr id="monthTotalsRow"></tr>
+      </tfoot>
+    </table>
+  </div>
+
+  <!-- خلاصه ماهانه + نمودار -->
+  <div class="card" style="margin-top:14px">
+    <h2>خلاصه ماهانه</h2>
+    <div id="summary" class="grid">
+      <div class="g6">
+        <div class="grid">
+          <div class="g12"><span class="muted">مبالغ ماهانه:</span></div>
+          <div class="g6">جاری: <b id="sumJari">0</b></div>
+          <div class="g6">پس‌انداز: <b id="sumPasandaz">0</b></div>
+          <div class="g6">کوتاه‌مدت: <b id="sumKotah">0</b></div>
+          <div class="g6">بلندمدت: <b id="sumBoland">0</b></div>
+          <div class="g12">جمع کل ماه: <b id="sumTotal">0</b></div>
+          <div class="g12"><span class="muted">درصد از جمع ماه:</span></div>
+          <div class="g6">جاری: <b id="pJari">0%</b></div>
+          <div class="g6">پس‌انداز: <b id="pPasandaz">0%</b></div>
+          <div class="g6">کوتاه‌مدت: <b id="pKotah">0%</b></div>
+          <div class="g6">بلندمدت: <b id="pBoland">0%</b></div>
+        </div>
+      </div>
+      <div class="g6">
+        <canvas id="chart" width="600" height="260"></canvas>
+      </div>
+    </div>
+    <div class="hint">نمودار: ستون‌های روزانه به‌صورت **پشته‌ای (Stacked)** و رنگ‌های ثابت برای چهار دسته.</div>
+  </div>
+</div>
+
+<script>
+/*** ===== داده و ذخیره‌سازی ===== ***/
+const LS_KEY = "financeReport.v1"; // کلید LocalStorage
+
+function loadAll(){
+  try{ return JSON.parse(localStorage.getItem(LS_KEY)) || []; }
+  catch(e){ return []; }
+}
+function saveAll(data){
+  localStorage.setItem(LS_KEY, JSON.stringify(data));
+}
+
+function saveEntry(){
+  const date = document.getElementById('date').value;
+  const jari = +document.getElementById('jari').value || 0;
+  const pasandaz = +document.getElementById('pasandaz').value || 0;
+  const kotah = +document.getElementById('kotah').value || 0;
+  const boland = +document.getElementById('boland').value || 0;
+  if(!date){ alert('لطفاً تاریخ را انتخاب کنید'); return; }
+
+  const all = loadAll();
+  const idx = all.findIndex(r => r.date === date);
+  const row = {date, jari, pasandaz, kotah, boland};
+  if(idx>=0) all[idx] = row; else all.push(row);
+  all.sort((a,b)=>a.date.localeCompare(b.date));
+  saveAll(all);
+  clearForm(false);
+  render();
+}
+
+function clearForm(resetDate=true){
+  if(resetDate) document.getElementById('date').value='';
+  ['jari','pasandaz','kotah','boland'].forEach(id=>document.getElementById(id).value='');
+}
+
+/*** ===== ابزارها ===== ***/
+const fmt = n => n.toLocaleString('fa-IR');
+const pct = (n, d) => d>0 ? (Math.round((n/d)*10000)/100)+'%' : '0%';
+const ymOf = d => d.slice(0,7); // YYYY-MM
+
+function dataForMonth(ym){
+  return loadAll().filter(r=>ymOf(r.date)===ym);
+}
+
+/*** ===== رندر جدول، خلاصه و نمودار ===== ***/
+function render(){
+  const ym = document.getElementById('monthPicker').value || todayYM();
+  document.getElementById('monthPicker').value = ym;
+
+  const rows = dataForMonth(ym);
+  const tbody = document.querySelector('#dailyTable tbody');
+  tbody.innerHTML = '';
+
+  let monthTotals = {jari:0, pasandaz:0, kotah:0, boland:0, total:0};
+
+  rows.forEach(r=>{
+    const total = r.jari + r.pasandaz + r.kotah + r.boland;
+    monthTotals.jari += r.jari;
+    monthTotals.pasandaz += r.pasandaz;
+    monthTotals.kotah += r.kotah;
+    monthTotals.boland += r.boland;
+    monthTotals.total += total;
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${toJalaliLike(r.date)}</td>
+      <td>${fmt(r.jari)}</td><td class="muted">${pct(r.jari,total)}</td>
+      <td>${fmt(r.pasandaz)}</td><td class="muted">${pct(r.pasandaz,total)}</td>
+      <td>${fmt(r.kotah)}</td><td class="muted">${pct(r.kotah,total)}</td>
+      <td>${fmt(r.boland)}</td><td class="muted">${pct(r.boland,total)}</td>
+      <td><b>${fmt(total)}</b></td>`;
+    tbody.appendChild(tr);
+  });
+
+  // ردیف جمع ماه
+  const t = monthTotals, mt = document.getElementById('monthTotalsRow');
+  mt.innerHTML = `
+    <td><b>جمع ماه (${ymToFa(ym)})</b></td>
+    <td>${fmt(t.jari)}</td><td class="muted">${pct(t.jari,t.total)}</td>
+    <td>${fmt(t.pasandaz)}</td><td class="muted">${pct(t.pasandaz,t.total)}</td>
+    <td>${fmt(t.kotah)}</td><td class="muted">${pct(t.kotah,t.total)}</td>
+    <td>${fmt(t.boland)}</td><td class="muted">${pct(t.boland,t.total)}</td>
+    <td>${fmt(t.total)}</td>`;
+
+  // خلاصه ماهانه
+  document.getElementById('sumJari').textContent = fmt(t.jari);
+  document.getElementById('sumPasandaz').textContent = fmt(t.pasandaz);
+  document.getElementById('sumKotah').textContent = fmt(t.kotah);
+  document.getElementById('sumBoland').textContent = fmt(t.boland);
+  document.getElementById('sumTotal').textContent = fmt(t.total);
+  document.getElementById('pJari').textContent = pct(t.jari,t.total);
+  document.getElementById('pPasandaz').textContent = pct(t.pasandaz,t.total);
+  document.getElementById('pKotah').textContent = pct(t.kotah,t.total);
+  document.getElementById('pBoland').textContent = pct(t.boland,t.total);
+
+  drawChart('chart', rows);
+}
+
+/*** ===== نمودار پشته‌ای سبک (بدون کتابخانه) ===== ***/
+function drawChart(canvasId, rows){
+  const c = document.getElementById(canvasId);
+  const ctx = c.getContext('2d');
+  const W = c.width, H = c.height;
+  ctx.clearRect(0,0,W,H);
+
+  // محور و شبکه
+  ctx.strokeStyle = 'rgba(148,163,184,.35)';
+  ctx.lineWidth = 1;
+  for(let i=0;i<=5;i++){
+    const y = 20 + i*((H-40)/5);
+    ctx.beginPath(); ctx.moveTo(40,y); ctx.lineTo(W-10,y); ctx.stroke();
+  }
+  // برچسب رنگ‌ها
+  const legend = [
+    {name:'کوتاه‌مدت', color:'#f59e0b'},
+    {name:'جاری', color:'#22c55e'},
+    {name:'پس‌انداز', color:'#3b82f6'},
+    {name:'بلندمدت', color:'#60a5fa'}
+  ];
+  legend.forEach((l,i)=>{
+    const x=50+i*120, y=H-16;
+    ctx.fillStyle=l.color; ctx.fillRect(x,y-8,12,12);
+    ctx.fillStyle='#cbd5e1'; ctx.font='12px Tahoma'; ctx.fillText(l.name,x+16,y+3);
+  });
+
+  if(rows.length===0) return;
+
+  // مقیاس
+  const totals = rows.map(r=>r.jari+r.pasandaz+r.kotah+r.boland);
+  const max = Math.max(...totals);
+  const chartH = H-60, chartW = W-60, ox=40, oy=H-40;
+  const barW = chartW / Math.max(rows.length,1) * 0.6;
+
+  rows.forEach((r,idx)=>{
+    const x = ox + (idx+0.2) * (chartW/rows.length);
+    let yTop = oy;
+    const parts = [
+      {v:r.kotah, color:'#f59e0b'},
+      {v:r.jari, color:'#22c55e'},
+      {v:r.pasandaz, color:'#3b82f6'},
+      {v:r.boland, color:'#60a5fa'}
+    ];
+    parts.forEach(p=>{
+      const h = max? (p.v/max)*chartH : 0;
+      ctx.fillStyle = p.color;
+      ctx.fillRect(x, yTop - h, barW, h);
+      yTop -= h;
+    });
+    // تاریخ در محور x
+    ctx.fillStyle = '#9aa8bd';
+    ctx.font = '11px Tahoma';
+    const label = toJalaliLike(r.date).slice(5); // فقط ماه/روز شمسی‌مانند
+    ctx.fillText(label, x-2, oy+14);
+  });
+}
+
+/*** ===== خروجی و ورودی فایل ===== ***/
+function exportCSV(){
+  const ym = document.getElementById('monthPicker').value || todayYM();
+  const rows = dataForMonth(ym);
+  let csv = 'date,jari,pasandaz,kotah,boland\n';
+  rows.forEach(r=>{ csv += `${r.date},${r.jari},${r.pasandaz},${r.kotah},${r.boland}\n`; });
+  download(csv, `daily_${ym}.csv`, 'text/csv');
+}
+
+function exportJSON(){
+  const ym = document.getElementById('monthPicker').value || todayYM();
+  const rows = dataForMonth(ym);
+  download(JSON.stringify(rows,null,2), `daily_${ym}.json`, 'application/json');
+}
+
+function download(content, filename, type){
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([content], {type}));
+  a.download = filename;
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 2000);
+}
+
+function importCSV(file){
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e=>{
+    const lines = e.target.result.trim().split(/\r?\n/);
+    const header = lines.shift().split(',').map(s=>s.trim());
+    const req = ['date','jari','pasandaz','kotah','boland'];
+    const ok = req.every(k=>header.includes(k));
+    if(!ok){ alert('هدر CSV باید شامل date,jari,pasandaz,kotah,boland باشد'); return; }
+    const idx = k=>header.indexOf(k);
+    const all = loadAll();
+    lines.forEach(line=>{
+      if(!line) return;
+      const c = line.split(',');
+      const row = {
+        date: c[idx('date')].trim(),
+        jari: +c[idx('jari')]||0,
+        pasandaz: +c[idx('pasandaz')]||0,
+        kotah: +c[idx('kotah')]||0,
+        boland: +c[idx('boland')]||0
+      };
+      const i = all.findIndex(r=>r.date===row.date);
+      if(i>=0) all[i]=row; else all.push(row);
+    });
+    all.sort((a,b)=>a.date.localeCompare(b.date));
+    saveAll(all);
+    render();
+  };
+  reader.readAsText(file);
+}
+
+/*** ===== ابزار تاریخ و نمایش شمسی‌مانند ===== ***/
+/* برای سادگی تبدیل کامل تقویم انجام نشده؛
+   فقط نمایش به صورت 1404/05/20 مشابه تصویر: سال میلادی را به هجری‌شمسی دقیق تبدیل نمی‌کند،
+   اما برای گزارش داخلی کفایت می‌کند. در صورت نیاز می‌توان کتابخانه شمسی اضافه کرد. */
+function toJalaliLike(iso){ // YYYY-MM-DD -> YYYY/MM/DD بصورت نمایشی
+  return iso.replaceAll('-','/'); 
+}
+function todayYM(){
+  const d=new Date(); const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0');
+  return `${y}-${m}`;
+}
+function ymToFa(ym){ return ym.replace('-','/'); }
+
+/*** ===== شروع ===== ***/
+document.getElementById('monthPicker').addEventListener('change', render);
+window.addEventListener('load', ()=>{
+  // مقداردهی اولیه
+  if(!document.getElementById('monthPicker').value)
+    document.getElementById('monthPicker').value = todayYM();
+  render();
+});
+</script>
+</body>
+</html>
